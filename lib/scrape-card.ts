@@ -27,7 +27,7 @@ export async function scrapeCardDetails(
         const resp = await fetch(url, {
           headers: {
             "User-Agent":
-              "Mozilla/5.0 (compatible; CardPilot/1.0; +https://cardpilot.app)",
+              "Mozilla/5.0 (compatible; CreditCardGo/1.0; +https://creditcardgo.app)",
             Accept: "text/html",
           },
           signal: AbortSignal.timeout(5000),
@@ -54,7 +54,7 @@ export async function scrapeCardDetails(
       {
         headers: {
           "User-Agent":
-            "Mozilla/5.0 (compatible; CardPilot/1.0; +https://cardpilot.app)",
+            "Mozilla/5.0 (compatible; CreditCardGo/1.0; +https://creditcardgo.app)",
           Accept: "text/html",
         },
         signal: AbortSignal.timeout(8000),

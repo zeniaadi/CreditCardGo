@@ -113,7 +113,7 @@ export function ResultsDisplay({ messages, isStreaming }: ResultsDisplayProps) {
   if (!lastAssistant && !hasToolCalls) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
-        <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+        <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
         <span>Preparing your optimization report...</span>
       </div>
     )
@@ -123,9 +123,9 @@ export function ResultsDisplay({ messages, isStreaming }: ResultsDisplayProps) {
     <div className="relative flex flex-col gap-6">
       {/* Research Progress */}
       {hasToolCalls && (
-        <div className="rounded-lg border border-border bg-secondary/30 p-4">
+        <div className="rounded-2xl border border-border/60 bg-secondary/20 p-5">
           <div className="flex items-center gap-2 mb-3">
-            <Search className="h-4 w-4 text-accent" />
+            <Search className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-foreground">
               {isResearching
                 ? "Researching your cards online..."
@@ -143,9 +143,9 @@ export function ResultsDisplay({ messages, isStreaming }: ResultsDisplayProps) {
                   className="flex items-center gap-2 text-sm"
                 >
                   {isDone ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-accent shrink-0" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-secondary shrink-0" />
                   ) : (
-                    <span className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30 border-t-accent animate-spin shrink-0" />
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30 border-t-primary animate-spin shrink-0" />
                   )}
                   <span
                     className={
@@ -164,8 +164,8 @@ export function ResultsDisplay({ messages, isStreaming }: ResultsDisplayProps) {
 
       {/* Streaming indicator */}
       {isStreaming && !isResearching && text.length > 0 && (
-        <div className="sticky top-0 z-10 flex items-center gap-2 rounded-lg bg-accent/10 border border-accent/20 px-4 py-2 text-sm">
-          <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+        <div className="sticky top-0 z-10 flex items-center gap-2 rounded-2xl bg-primary/10 border border-primary/20 px-4 py-2 text-sm">
+          <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
           <span className="text-foreground/70">
             Generating your report...
           </span>
@@ -175,12 +175,12 @@ export function ResultsDisplay({ messages, isStreaming }: ResultsDisplayProps) {
       {/* Tabbed Report */}
       {text.length > 0 && hasSections && !isStreaming ? (
         <Tabs defaultValue={sections[0].key} className="w-full">
-          <TabsList className="w-full flex h-auto flex-wrap gap-1 bg-secondary/50 p-1.5 rounded-lg">
+          <TabsList className="w-full flex h-auto flex-wrap gap-1 bg-muted/50 p-2 rounded-2xl">
             {sections.map((section, idx) => (
               <TabsTrigger
                 key={section.key}
                 value={section.key}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-md"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-xl"
               >
                 {TAB_ICONS[idx] || null}
                 <span className="hidden sm:inline">{section.title}</span>
@@ -240,7 +240,7 @@ function MarkdownContent({ content }: { content: string }) {
             </strong>
           ),
           table: ({ children }) => (
-            <div className="my-6 overflow-x-auto rounded-lg border border-border">
+            <div className="my-6 overflow-x-auto rounded-2xl border border-border/60">
               <table className="w-full text-sm">{children}</table>
             </div>
           ),
@@ -279,7 +279,7 @@ function MarkdownContent({ content }: { content: string }) {
           ),
           hr: () => <hr className="my-8 border-border" />,
           blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-accent pl-4 my-4 text-foreground/70 italic">
+            <blockquote className="border-l-4 border-primary pl-4 my-4 text-foreground/70 italic">
               {children}
             </blockquote>
           ),
