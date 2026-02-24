@@ -314,12 +314,12 @@ export function CardInput({ onSubmit, isLoading }: CardInputProps) {
     <div className="flex flex-col gap-6">
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search banks or cards..."
-          className="pl-10 bg-card border-border"
+          className="pl-10 rounded-xl border-border/80 bg-muted/40 shadow-inner focus-visible:ring-primary"
           disabled={isLoading}
         />
       </div>
@@ -343,7 +343,7 @@ export function CardInput({ onSubmit, isLoading }: CardInputProps) {
                   {category.label}
                 </span>
               </div>
-              <div className="rounded-lg border border-border bg-card">
+              <div className="rounded-2xl border border-border/60 bg-card shadow-sm">
                 {categoryBanks.map((bankGroup, idx) => {
                   const isExpanded =
                     expandedBanks.includes(bankGroup.bank) ||
@@ -384,7 +384,7 @@ export function CardInput({ onSubmit, isLoading }: CardInputProps) {
                           </span>
                         </div>
                         {selectedCount > 0 && (
-                          <span className="flex items-center justify-center h-5 min-w-5 rounded-full bg-accent text-accent-foreground text-xs font-medium px-1.5">
+                          <span className="flex items-center justify-center h-5 min-w-5 rounded-full bg-primary text-primary-foreground text-xs font-medium px-1.5">
                             {selectedCount}
                           </span>
                         )}
@@ -470,7 +470,7 @@ export function CardInput({ onSubmit, isLoading }: CardInputProps) {
                   }
                 }}
                 placeholder="e.g. My Rewards Card — My Bank"
-                className="flex-1 bg-card border-border"
+                className="flex-1 rounded-xl border-border/80 bg-muted/40 shadow-inner focus-visible:ring-primary"
                 disabled={isLoading}
               />
               <Button
@@ -499,7 +499,7 @@ export function CardInput({ onSubmit, isLoading }: CardInputProps) {
             {selectedCards.map((card) => (
               <div
                 key={card}
-                className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm text-secondary-foreground"
+                className="flex items-center gap-2 rounded-full bg-secondary/60 border border-border/60 px-3.5 py-2 text-sm text-secondary-foreground shadow-sm"
               >
                 <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>{card}</span>
@@ -523,11 +523,11 @@ export function CardInput({ onSubmit, isLoading }: CardInputProps) {
         <Button
           onClick={handleSubmit}
           disabled={selectedCards.length === 0 || isLoading}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
+          className="rounded-full bg-accent text-accent-foreground shadow-md hover:brightness-105 active:scale-[0.97] active:shadow-sm px-7 py-3 font-semibold"
         >
           {isLoading ? (
             <>
-              <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+              <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-accent-foreground border-t-transparent" />
               Analyzing...
             </>
           ) : (
