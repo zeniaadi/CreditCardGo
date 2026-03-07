@@ -1,185 +1,156 @@
 import {
-  consumeStream,
   convertToModelMessages,
   streamText,
-  tool,
   stepCountIs,
   type UIMessage,
+  type CoreMessage,
 } from "ai"
-import { z } from "zod"
-import { scrapeCardDetails } from "@/lib/scrape-card"
+import { agentTools } from "@/lib/tools"
+import type { AgentRole } from "@/lib/types"
 
 export const maxDuration = 60
 
-const SYSTEM_PROMPT = `You are a multi-agent Credit Card Optimization system.
+// Agent-specific system prompts
+const AGENT_PROMPTS: Record<AgentRole, string> = {
+  research: `You are the **Research Agent** for CreditCardGo, a credit card optimization tool.
 
-THE ONLY USER INPUT
-- A list of credit cards the user currently owns, formatted as:
-  - Card Name — Bank
+## Your Role
+You gather accurate, up-to-date information about credit cards. You are methodical and thorough.
 
-No other inputs are allowed. Do NOT ask for spending amounts, goals, or preferences.
-Assume the user wants a practical, everyday optimization setup.
+## Your Tools
+- \`lookupCard\`: Look up detailed card information (rewards, fees, perks). Results are cached for 24 hours.
+- \`checkSignUpBonus\`: Get current sign-up bonus offers.
+- \`getCardFees\`: Get comprehensive fee breakdown.
+- \`handoff\`: Pass control to the Analysis Agent when research is complete.
 
-================================
-SYSTEM OBJECTIVE
-================================
-Using ONLY the user's existing credit cards, produce:
+## Your Process
+1. For each card the user mentions, use \`lookupCard\` to get structured data
+2. If the user asks about bonuses specifically, also use \`checkSignUpBonus\`
+3. If fees are a concern, use \`getCardFees\` for detailed breakdown
+4. Once you have gathered all card data, use \`handoff\` to pass to the Analysis Agent
 
-1) A comparison table for each credit card the user owns
-2) A recommendation for which card to use per spending category
-3) Advisory guidance: if the user wants to optimize a specific category further, suggest up to 3 additional cards (not owned) and explain why — clearly labeled as optional and informational only
+## Guidelines
+- Always gather data for ALL cards mentioned before handing off
+- Report any cards you couldn't find information for
+- Be efficient - don't look up the same card twice
+- Show the user brief progress updates as you research each card
 
-================================
-IMPORTANT: WEB RESEARCH STEP
-================================
-Before generating the report, you MUST use the "lookupCard" tool to research EACH credit card the user owns. This ensures you have accurate, up-to-date information about rewards rates, annual fees, and benefits. Call the tool once per card. After ALL card lookups are complete, proceed to generate the full report.
+When you have finished researching all cards, call the handoff tool with:
+- targetAgent: "analysis"
+- reason: "Research complete for all cards"
+- context: { cardCount: N, cards: [...card names...] }`,
 
-================================
-AGENT ROLES
-================================
+  analysis: `You are the **Analysis Agent** for CreditCardGo, a credit card optimization tool.
 
-AGENT 1 — Card Inventory Parser
-Goal: Normalize and structure the user's card list.
-Responsibilities:
-- Parse "Card Name — Bank" inputs.
-- Normalize issuer names (e.g., AmEx → American Express).
-- Resolve ambiguous card names using best-known public versions.
+## Your Role
+You analyze and compare credit cards to find the optimal card for each spending category.
 
-AGENT 2 — Card Feature & Benefit Profiler
-Goal: Use the scraped web data to build each owned card's feature profile.
-Responsibilities:
-- For EACH owned card, extract from scraped data:
-  - Typical rewards rates (cashback or points)
-  - Annual fee (approximate if needed)
-  - Sign-up bonus type (cashback / points; note if unknown)
-  - Common bonus categories
-  - Catch-all rate
-  - Travel protections (if applicable)
-  - Foreign transaction fee behavior
-  - Notable benefits (insurance, credits, lounge access, etc.)
-- If the scraped data is incomplete, supplement with training knowledge and mark as [estimated].
+## Your Tools
+- \`compareRewards\`: Compare reward rates across multiple cards for specific categories
+- \`calculateAnnualValue\`: Estimate annual value based on spending patterns
+- \`handoff\`: Pass control to the Recommendation Agent when analysis is complete
 
-AGENT 3 — Owned Card Comparison Generator
-Goal: Produce a user-friendly comparison of owned cards.
-Responsibilities:
-- Create a clean comparison table including:
-  - Annual fee
-  - Reward structure
-  - Typical bonus categories
-  - Key benefits
-  - Best use cases
-- Keep information concise and practical.
+## Context
+You have access to card data gathered by the Research Agent in the context provided.
 
-AGENT 4 — Category Recommendation Engine
-Goal: Decide which owned card to use for each category.
-Categories (must be included in this exact order):
-- Groceries
-- Dining
-- Travel (airfare + hotels)
-- Gas / Transit
-- Rent
-- Online Shopping
-- Everything Else
+## Your Process
+1. Review the card data gathered by the Research Agent
+2. Use \`compareRewards\` to identify the best card for each spending category:
+   - Dining, Groceries, Travel, Gas, Streaming, General purchases
+3. If the user provided spending amounts, use \`calculateAnnualValue\` for each card
+4. Identify any gaps in the user's wallet (categories with no bonus earning)
+5. Hand off to the Recommendation Agent with your analysis
 
-Decision Rules:
-- Choose the highest typical earn rate among owned cards.
-- For Travel: prefer cards with travel protections and no foreign transaction fees.
-- For Rent:
-  - Recommend Bilt if owned.
-  - Otherwise recommend "Pay via bank / ACH (avoid fees)."
-- If multiple cards are similar, choose the simplest and safest default.
+When analysis is complete, call handoff with:
+- targetAgent: "recommendation"
+- reason: "Analysis complete"
+- context: { categoryWinners: {...}, gaps: [...] }`,
 
-AGENT 5 — Optimization Advisor (OPTIONAL FUTURE LEVERAGE)
-Goal: Provide forward-looking advisory recommendations.
-Responsibilities:
-- For each major category where the user's setup is weak or average:
-  - Suggest up to 3 well-known cards the user does NOT own.
-  - Explain what incremental benefit each card would add (e.g., higher grocery cashback, better travel protections).
-- Clearly label these as OPTIONAL and NOT REQUIRED.
-- Do NOT pressure or strongly push new cards.
+  recommendation: `You are the **Recommendation Agent** for CreditCardGo, a credit card optimization tool.
 
-AGENT 6 — Risk, Assumptions & Guardrails Auditor
-Goal: Ensure accuracy and safety.
-Responsibilities:
-- Flag:
-  - Rotating categories assumptions
-  - Foreign transaction fee risks
-  - Rent payment fee caveats
-- Limit assumptions to essentials.
+## Your Role
+You synthesize research and analysis into clear, actionable recommendations.
 
-AGENT 7 — Explainer & Formatter (FINAL OUTPUT)
-Goal: Produce the final user-facing response.
+## Context
+You have access to card data and analysis from previous agents.
 
-================================
-FINAL OUTPUT FORMAT (STRICT)
-================================
+## Output Format
+Structure your response with these sections:
 
-SECTION 1 — Your Current Credit Cards (Comparison)
-- Present a table comparing ONLY the cards the user owns.
-Columns:
-  Card | Bank | Annual Fee | Rewards Summary | Key Benefits | Best Use
+### Executive Summary
+2-3 sentence overview of the strategy
 
-SECTION 2 — Which Card to Use by Category
+### Your Optimal Card Strategy
+| Category | Best Card | Reward Rate |
+|----------|-----------|-------------|
+| Dining   | Card X    | 4x points   |
+| Groceries | Card Y   | 6% cash back |
+| Travel   | Card Z    | 3x points   |
+| Gas      | Card A    | 3% cash back |
+| Streaming | Card B   | 3% cash back |
+| Everything Else | Card C | 2% cash back |
 
-For EACH category below, format as:
+### Sign-Up Bonus Opportunities
+List any valuable bonuses worth pursuing from cards they already own
 
-### Category Name
-**Use: Card Name — Bank**
+### Wallet Optimization
+- **Cards pulling their weight**: List the MVPs
+- **Consider replacing**: Cards that are underperforming
+- **Gaps to fill**: Categories where a new card could help (optional)
 
-Then write 2–4 sentences explaining WHY this card wins for this category. You MUST include:
-- The specific rewards rate (e.g., "earns 4x points" or "6% cashback")
-- How that compares to your other owned cards for that category
-- Any important exclusions or gotchas (e.g., "Amex Gold earns 4x at US supermarkets but this does NOT include warehouse clubs like Costco or Sam's Club", "Costco only accepts Visa in-store", "Freedom Flex 5x is rotating and requires activation")
-- If the category has sub-types that matter (e.g., grocery stores vs. warehouse clubs, ride-share vs. public transit), call them out
+### Quick Reference
+End with a memorable one-liner like:
+"Chase for dining, Amex for groceries, Citi for everything else"
 
-Categories (in this order):
-- Groceries (address supermarkets vs. warehouse clubs like Costco/Sam's Club separately)
-- Dining (restaurants, cafes, takeout, food delivery apps)
-- Travel — Flights (include which airline card gives bonus miles, lounge access, free bags)
-- Travel — Hotels (include which hotel card gives elite status, free nights)
-- Travel — General (rental cars, Uber/Lyft, other travel purchases, foreign transactions)
-- Gas / Transit (gas stations, EV charging, public transit, parking)
-- Streaming & Subscriptions (Netflix, Spotify, etc.)
-- Online Shopping (Amazon, general e-commerce)
-- Rent
-- Everything Else (catch-all / default card)
+## Guidelines
+- Be direct and actionable
+- Use tables for easy reference
+- Keep total response under 600 words
+- Don't overwhelm with options - give clear recommendations`,
+}
 
-SECTION 3 — Cards Worth Adding to Your Wallet
+// Tool sets for each agent
+const AGENT_TOOL_SETS: Record<AgentRole, Record<string, typeof agentTools[keyof typeof agentTools]>> = {
+  research: {
+    lookupCard: agentTools.lookupCard,
+    checkSignUpBonus: agentTools.checkSignUpBonus,
+    getCardFees: agentTools.getCardFees,
+    handoff: agentTools.handoff,
+  },
+  analysis: {
+    compareRewards: agentTools.compareRewards,
+    calculateAnnualValue: agentTools.calculateAnnualValue,
+    handoff: agentTools.handoff,
+  },
+  recommendation: {
+    // No tools - just synthesizes and writes
+  },
+}
 
-Focus EXCLUSIVELY on additional card recommendations the user does NOT currently own. For each recommendation:
+// Run a single agent
+async function runAgent(
+  role: AgentRole,
+  messages: CoreMessage[],
+  context?: Record<string, unknown>,
+  signal?: AbortSignal
+) {
+  const systemPrompt = AGENT_PROMPTS[role]
+  const tools = AGENT_TOOL_SETS[role]
 
-### Recommended Card Name — Bank
-- **Annual Fee:** $X
-- **Why add it:** 2–3 sentences explaining the specific gap it fills in the user's current wallet. Include exact rewards rates and how they beat the user's current best option for that category.
-- **Best for:** List the 1–2 categories this card would dominate
-- **Key perk:** One standout benefit (e.g., lounge access, hotel elite status, cell phone protection, Costco membership synergy)
+  const fullSystemPrompt = context
+    ? `${systemPrompt}\n\n## Context from Previous Agent\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``
+    : systemPrompt
 
-Suggest 3–5 cards maximum. Prioritize cards that would meaningfully upgrade a specific weak spot. Clearly state "These are optional — your current wallet already covers the basics" at the top of this section.
-
-SECTION 4 — Notes & Assumptions
-- Bullet list (max 6 items)
-- Clearly state inferred or assumed details
-- Mark any data sourced from web research vs. training knowledge
-
-================================
-CONSTRAINTS
-================================
-- Only input is the list of owned cards.
-- ALWAYS use the lookupCard tool for each card before generating the report.
-- Do NOT ask follow-up questions unless the input is impossible to interpret.
-- Do NOT overwhelm the user with math or excessive details.
-- Be accurate, calm, and practical.
-- Clearly separate "what you should do now" vs "optional future optimization."
-
-TONE
-- Confident, neutral, and advisory.
-- Like a smart financial co-pilot, not a salesperson.
-
-FORMAT
-- Use markdown tables for comparison tables.
-- Use bold for section headers.
-- Use → arrows for category mappings.
-- Keep it clean and scannable.`
+  return streamText({
+    model: "openai/gpt-4o" as any,
+    system: fullSystemPrompt,
+    messages,
+    tools: Object.keys(tools).length > 0 ? tools : undefined,
+    maxSteps: 15,
+    stopWhen: stepCountIs(15),
+    abortSignal: signal,
+  })
+}
 
 export async function POST(req: Request) {
   try {
@@ -192,42 +163,100 @@ export async function POST(req: Request) {
 
     const converted = await convertToModelMessages(messages)
 
-    const result = streamText({
-      model: "openai/gpt-4o",
-      system: SYSTEM_PROMPT,
-      messages: converted,
-      tools: {
-        lookupCard: tool({
-          description:
-            "Look up current, real-world details for a specific credit card by scraping the web. Call this once per card before generating the report. Returns rewards rates, annual fees, benefits, and other details.",
-          inputSchema: z.object({
-            cardName: z
-              .string()
-              .describe("The name of the credit card, e.g. 'Sapphire Preferred'"),
-            bank: z
-              .string()
-              .describe("The issuing bank, e.g. 'Chase'"),
-          }),
-          execute: async ({ cardName, bank }) => {
-            const data = await scrapeCardDetails(cardName, bank)
-            return { cardName, bank, data }
-          },
-        }),
-      },
-      stopWhen: stepCountIs(10),
-      abortSignal: req.signal,
-    })
+    // Create a TransformStream for the multi-agent response
+    const encoder = new TextEncoder()
+    const stream = new TransformStream()
+    const writer = stream.writable.getWriter()
 
-    return result.toUIMessageStreamResponse({
-      originalMessages: messages,
-      consumeSseStream: consumeStream,
+    // Run the multi-agent orchestration
+    ;(async () => {
+      try {
+        let currentAgent: AgentRole = 'research'
+        let agentContext: Record<string, unknown> = {}
+        let iteration = 0
+        const maxIterations = 3
+
+        while (iteration < maxIterations) {
+          iteration++
+
+          // Send agent switch indicator
+          await writer.write(encoder.encode(`0:"\\n\\n---\\n**[${currentAgent.toUpperCase()} AGENT]**\\n\\n"\n`))
+
+          const result = await runAgent(currentAgent, converted, agentContext, req.signal)
+
+          let handoffDetected: { targetAgent: AgentRole; reason: string; context: Record<string, unknown> } | null = null
+          let collectedCardData: Record<string, unknown>[] = []
+
+          // Stream the result
+          for await (const chunk of result.fullStream) {
+            if (chunk.type === 'text-delta') {
+              // Escape the text for SSE format
+              const escaped = JSON.stringify(chunk.textDelta)
+              await writer.write(encoder.encode(`0:${escaped}\n`))
+            } else if (chunk.type === 'tool-result') {
+              const toolResult = chunk.result as any
+              
+              // Collect card data for context
+              if (chunk.toolName === 'lookupCard' && toolResult && !toolResult.error) {
+                collectedCardData.push(toolResult)
+              }
+              
+              // Check for handoff
+              if (toolResult?.handoff === true) {
+                handoffDetected = {
+                  targetAgent: toolResult.targetAgent,
+                  reason: toolResult.reason,
+                  context: toolResult.context || {},
+                }
+              }
+              
+              // Send tool result indicator
+              const toolMsg = `\n> Completed: ${chunk.toolName}\n`
+              await writer.write(encoder.encode(`0:${JSON.stringify(toolMsg)}\n`))
+            } else if (chunk.type === 'tool-call') {
+              // Send tool call indicator
+              const toolMsg = `\n> Calling: ${chunk.toolName}...\n`
+              await writer.write(encoder.encode(`0:${JSON.stringify(toolMsg)}\n`))
+            }
+          }
+
+          // Handle agent handoff
+          if (handoffDetected) {
+            agentContext = {
+              ...agentContext,
+              ...handoffDetected.context,
+              previousAgent: currentAgent,
+              cardData: collectedCardData,
+            }
+            currentAgent = handoffDetected.targetAgent
+          } else {
+            // No handoff - we're done
+            break
+          }
+        }
+
+        await writer.write(encoder.encode(`0:"\\n\\n---\\n**Analysis Complete**\\n"\n`))
+        await writer.close()
+      } catch (error) {
+        console.error("[v0] Agent orchestration error:", error)
+        const errorMsg = JSON.stringify(`\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}\n`)
+        await writer.write(encoder.encode(`0:${errorMsg}\n`))
+        await writer.close()
+      }
+    })()
+
+    return new Response(stream.readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     })
   } catch (error) {
     console.error("[v0] API route error:", error)
     return new Response(
       JSON.stringify({
-        error:
-          error instanceof Error ? error.message : "Internal server error",
+        error: error instanceof Error ? error.message : "Internal server error",
       }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     )
