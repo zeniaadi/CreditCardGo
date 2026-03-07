@@ -40,7 +40,7 @@ export default function Page() {
   }
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
+    <div className="min-h-screen bg-background relative overflow-x-hidden">
       {/* Soft gradient background blobs */}
       <div
         className="pointer-events-none fixed inset-0 -z-10"
