@@ -1,6 +1,6 @@
 /**
- * CreditCardGo Agent Tools
- * Specialized tools for credit card research, analysis, and recommendations
+ * CreditCardGo Agent Tools (AI SDK 6)
+ * Using inputSchema (not parameters) per AI SDK 6 migration
  */
 import { tool } from 'ai'
 import { z } from 'zod'
@@ -150,11 +150,11 @@ function parseCardData(rawText: string, cardName: string, bank: string): CardDat
 // Tool 1: Lookup card with caching and structured output
 export const lookupCardTool = tool({
   description: 'Look up detailed information about a specific credit card. Returns structured data including rewards, fees, and perks. Results are cached for 24 hours.',
-  parameters: z.object({
+  inputSchema: z.object({
     cardName: z.string().describe('The name of the credit card (e.g., "Sapphire Preferred")'),
     bank: z.string().describe('The bank or issuer (e.g., "Chase", "American Express")'),
   }),
-  execute: async ({ cardName, bank }): Promise<CardData & { source: string } | { error: string; name: string; bank: string }> => {
+  execute: async ({ cardName, bank }) => {
     // Check cache first
     const cached = await getCachedCard(cardName, bank)
     if (cached) {
@@ -191,11 +191,11 @@ export const lookupCardTool = tool({
 // Tool 2: Compare reward rates across categories
 export const compareRewardsTool = tool({
   description: 'Compare reward rates between multiple cards for specific spending categories. Identifies the best card for each category.',
-  parameters: z.object({
+  inputSchema: z.object({
     cards: z.array(CardDataSchema).describe('Array of card data to compare'),
     categories: z.array(z.string()).describe('Spending categories to compare (e.g., ["Dining", "Travel", "Groceries"])'),
   }),
-  execute: async ({ cards, categories }): Promise<Record<string, { winner: string; rate: string; cards: { name: string; rate: string }[] }>> => {
+  execute: async ({ cards, categories }) => {
     const comparison: Record<string, { winner: string; rate: string; cards: { name: string; rate: string }[] }> = {}
 
     for (const category of categories) {
@@ -225,7 +225,7 @@ export const compareRewardsTool = tool({
 // Tool 3: Calculate annual value estimate
 export const calculateAnnualValueTool = tool({
   description: 'Calculate estimated annual rewards value based on spending patterns. Accounts for reward rates, caps, and annual fees.',
-  parameters: z.object({
+  inputSchema: z.object({
     card: CardDataSchema.describe('Card data to calculate value for'),
     spending: z.object({
       dining: z.number().optional().describe('Annual dining spend'),
@@ -237,7 +237,7 @@ export const calculateAnnualValueTool = tool({
     }).describe('Annual spending by category'),
     pointValue: z.number().default(0.01).describe('Value per point/mile in dollars (default 0.01 = 1 cent)'),
   }),
-  execute: async ({ card, spending, pointValue }): Promise<AnnualValueEstimate> => {
+  execute: async ({ card, spending, pointValue }) => {
     const breakdown: AnnualValueEstimate['breakdown'] = []
     let totalRewardsValue = 0
 
@@ -294,7 +294,7 @@ export const calculateAnnualValueTool = tool({
 // Tool 4: Check sign-up bonus details
 export const checkSignUpBonusTool = tool({
   description: 'Get detailed sign-up bonus information for a card, including current offer value, spending requirement, and time limit.',
-  parameters: z.object({
+  inputSchema: z.object({
     cardName: z.string().describe('The name of the credit card'),
     bank: z.string().describe('The bank or issuer'),
   }),
@@ -349,7 +349,7 @@ export const checkSignUpBonusTool = tool({
 // Tool 5: Get card fees breakdown
 export const getCardFeesTool = tool({
   description: 'Get comprehensive fee information for a card including annual fee, foreign transaction fee, balance transfer fee, and other charges.',
-  parameters: z.object({
+  inputSchema: z.object({
     cardName: z.string().describe('The name of the credit card'),
     bank: z.string().describe('The bank or issuer'),
   }),

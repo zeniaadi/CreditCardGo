@@ -3,7 +3,6 @@ import {
   convertToModelMessages,
   streamText,
   stepCountIs,
-  createUIMessageStreamResponse,
   type UIMessage,
 } from "ai"
 import { agentTools } from "@/lib/tools"
@@ -76,21 +75,14 @@ export async function POST(req: Request) {
     const converted = await convertToModelMessages(messages)
 
     const result = streamText({
-      model: "openai/gpt-4o" as any,
+      model: "openai/gpt-4o",
       system: SYSTEM_PROMPT,
       messages: converted,
-      tools: {
-        lookupCard: agentTools.lookupCard,
-        checkSignUpBonus: agentTools.checkSignUpBonus,
-        getCardFees: agentTools.getCardFees,
-        compareRewards: agentTools.compareRewards,
-        calculateAnnualValue: agentTools.calculateAnnualValue,
-      },
-      maxSteps: 20,
-      stopWhen: stepCountIs(20),
+      tools: agentTools,
+      stopWhen: stepCountIs(15),
     })
 
-    return createUIMessageStreamResponse({ stream: result.toUIMessageStream() })
+    return result.toUIMessageStreamResponse()
   } catch (error) {
     console.error("[v0] API route error:", error)
     return new Response(
