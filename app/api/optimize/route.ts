@@ -2,7 +2,7 @@ import {
   convertToModelMessages,
   streamText,
   stepCountIs,
-  toUIMessageStreamResponse,
+  createUIMessageStreamResponse,
   type UIMessage,
 } from "ai"
 import { agentTools } from "@/lib/tools"
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
       stopWhen: stepCountIs(20),
     })
 
-    return toUIMessageStreamResponse(result)
+    return createUIMessageStreamResponse({ stream: result.toUIMessageStream() })
   } catch (error) {
     console.error("[v0] API route error:", error)
     return new Response(
