@@ -1,11 +1,14 @@
-// CreditCardGo Agent Tools
+/**
+ * CreditCardGo Agent Tools
+ * Specialized tools for credit card research, analysis, and recommendations
+ */
 import { tool } from 'ai'
 import { z } from 'zod'
 import { getCachedCard, setCachedCard } from './cache'
 import { scrapeCardDetails } from './scrape-card'
-import type { CardData, RewardCategory, SpendingProfile, AnnualValueEstimate } from './types'
+import type { CardData, AnnualValueEstimate } from './types'
 
-// Schema for structured card data
+// Schema for structured card data used in comparison tools
 const CardDataSchema = z.object({
   name: z.string(),
   bank: z.string(),
@@ -151,7 +154,7 @@ export const lookupCardTool = tool({
     cardName: z.string().describe('The name of the credit card (e.g., "Sapphire Preferred")'),
     bank: z.string().describe('The bank or issuer (e.g., "Chase", "American Express")'),
   }),
-  execute: async ({ cardName, bank }) => {
+  execute: async ({ cardName, bank }): Promise<CardData & { source: string } | { error: string; name: string; bank: string }> => {
     // Check cache first
     const cached = await getCachedCard(cardName, bank)
     if (cached) {
@@ -161,7 +164,7 @@ export const lookupCardTool = tool({
       }
     }
 
-    // Scrape fresh data (includes NerdWallet + Google fallback)
+    // Scrape fresh data
     const rawText = await scrapeCardDetails(cardName, bank)
 
     if (!rawText) {
@@ -192,7 +195,7 @@ export const compareRewardsTool = tool({
     cards: z.array(CardDataSchema).describe('Array of card data to compare'),
     categories: z.array(z.string()).describe('Spending categories to compare (e.g., ["Dining", "Travel", "Groceries"])'),
   }),
-  execute: async ({ cards, categories }) => {
+  execute: async ({ cards, categories }): Promise<Record<string, { winner: string; rate: string; cards: { name: string; rate: string }[] }>> => {
     const comparison: Record<string, { winner: string; rate: string; cards: { name: string; rate: string }[] }> = {}
 
     for (const category of categories) {
@@ -234,7 +237,7 @@ export const calculateAnnualValueTool = tool({
     }).describe('Annual spending by category'),
     pointValue: z.number().default(0.01).describe('Value per point/mile in dollars (default 0.01 = 1 cent)'),
   }),
-  execute: async ({ card, spending, pointValue }) => {
+  execute: async ({ card, spending, pointValue }): Promise<AnnualValueEstimate> => {
     const breakdown: AnnualValueEstimate['breakdown'] = []
     let totalRewardsValue = 0
 
@@ -399,31 +402,11 @@ export const getCardFeesTool = tool({
   },
 })
 
-// Tool 6: Handoff to next agent
-export const handoffTool = tool({
-  description: 'Hand off the conversation to a different specialized agent. Use this when the current task is complete and a different agent should continue.',
-  parameters: z.object({
-    targetAgent: z.enum(['research', 'analysis', 'recommendation']).describe('The agent to hand off to'),
-    reason: z.string().describe('Why the handoff is happening'),
-    context: z.record(z.unknown()).describe('Any context to pass to the next agent'),
-  }),
-  execute: async ({ targetAgent, reason, context }) => {
-    return {
-      handoff: true,
-      targetAgent,
-      reason,
-      context,
-      timestamp: new Date().toISOString(),
-    }
-  },
-})
-
-// Export all tools
+// Export all tools as an object
 export const agentTools = {
   lookupCard: lookupCardTool,
   compareRewards: compareRewardsTool,
   calculateAnnualValue: calculateAnnualValueTool,
   checkSignUpBonus: checkSignUpBonusTool,
   getCardFees: getCardFeesTool,
-  handoff: handoffTool,
 }
