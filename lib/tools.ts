@@ -1,32 +1,12 @@
 /**
  * CreditCardGo Agent Tools (AI SDK 6)
- * Using inputSchema (not parameters) per AI SDK 6 migration
+ * Simplified schemas for OpenAI compatibility
  */
 import { tool } from 'ai'
 import { z } from 'zod'
 import { getCachedCard, setCachedCard } from './cache'
 import { scrapeCardDetails } from './scrape-card'
 import type { CardData, AnnualValueEstimate } from './types'
-
-// Schema for structured card data used in comparison tools
-const CardDataSchema = z.object({
-  name: z.string(),
-  bank: z.string(),
-  annualFee: z.number(),
-  rewardCategories: z.array(z.object({
-    category: z.string(),
-    rate: z.string(),
-    cap: z.string().optional(),
-  })),
-  signUpBonus: z.object({
-    value: z.string(),
-    requirement: z.string(),
-    estimatedCashValue: z.string().optional(),
-  }).optional(),
-  foreignTransactionFee: z.string(),
-  creditScoreRequired: z.string().optional(),
-  perks: z.array(z.string()).optional(),
-})
 
 // Parse raw scraped text into structured CardData
 function parseCardData(rawText: string, cardName: string, bank: string): CardData {
@@ -148,11 +128,11 @@ function parseCardData(rawText: string, cardName: string, bank: string): CardDat
 }
 
 // Tool 1: Lookup card with caching and structured output
-export const lookupCardTool = tool({
-  description: 'Look up detailed information about a specific credit card. Returns structured data including rewards, fees, and perks. Results are cached for 24 hours.',
+const lookupCard = tool({
+  description: 'Look up detailed information about a specific credit card including rewards, fees, and perks. Results are cached for 24 hours.',
   inputSchema: z.object({
-    cardName: z.string().describe('The name of the credit card (e.g., "Sapphire Preferred")'),
-    bank: z.string().describe('The bank or issuer (e.g., "Chase", "American Express")'),
+    cardName: z.string().describe('The name of the credit card'),
+    bank: z.string().describe('The bank or issuer'),
   }),
   execute: async ({ cardName, bank }) => {
     // Check cache first
@@ -188,17 +168,25 @@ export const lookupCardTool = tool({
   },
 })
 
-// Tool 2: Compare reward rates across categories
-export const compareRewardsTool = tool({
-  description: 'Compare reward rates between multiple cards for specific spending categories. Identifies the best card for each category.',
+// Tool 2: Compare reward rates (accepts JSON string of card data)
+const compareRewards = tool({
+  description: 'Compare reward rates between cards for specific spending categories. Pass previously looked up card data as JSON.',
   inputSchema: z.object({
-    cards: z.array(CardDataSchema).describe('Array of card data to compare'),
-    categories: z.array(z.string()).describe('Spending categories to compare (e.g., ["Dining", "Travel", "Groceries"])'),
+    cardDataJson: z.string().describe('JSON string array of card data from lookupCard results'),
+    categories: z.string().describe('Comma-separated spending categories to compare (e.g., "Dining,Travel,Groceries")'),
   }),
-  execute: async ({ cards, categories }) => {
-    const comparison: Record<string, { winner: string; rate: string; cards: { name: string; rate: string }[] }> = {}
+  execute: async ({ cardDataJson, categories }) => {
+    let cards: CardData[]
+    try {
+      cards = JSON.parse(cardDataJson)
+    } catch {
+      return { error: 'Invalid card data JSON' }
+    }
 
-    for (const category of categories) {
+    const categoryList = categories.split(',').map(c => c.trim())
+    const comparison: Record<string, { winner: string; rate: string; allCards: { name: string; rate: string }[] }> = {}
+
+    for (const category of categoryList) {
       const categoryRates = cards.map(card => {
         const reward = card.rewardCategories.find(r => 
           r.category.toLowerCase() === category.toLowerCase()
@@ -214,7 +202,7 @@ export const compareRewardsTool = tool({
       comparison[category] = {
         winner: categoryRates[0]?.name || 'Unknown',
         rate: categoryRates[0]?.rate || '1x',
-        cards: categoryRates.map(({ name, rate }) => ({ name, rate })),
+        allCards: categoryRates.map(({ name, rate }) => ({ name, rate })),
       }
     }
 
@@ -223,31 +211,35 @@ export const compareRewardsTool = tool({
 })
 
 // Tool 3: Calculate annual value estimate
-export const calculateAnnualValueTool = tool({
-  description: 'Calculate estimated annual rewards value based on spending patterns. Accounts for reward rates, caps, and annual fees.',
+const calculateAnnualValue = tool({
+  description: 'Calculate estimated annual rewards value based on spending. Pass card data as JSON and spending amounts.',
   inputSchema: z.object({
-    card: CardDataSchema.describe('Card data to calculate value for'),
-    spending: z.object({
-      dining: z.number().optional().describe('Annual dining spend'),
-      groceries: z.number().optional().describe('Annual grocery spend'),
-      travel: z.number().optional().describe('Annual travel spend'),
-      gas: z.number().optional().describe('Annual gas spend'),
-      streaming: z.number().optional().describe('Annual streaming spend'),
-      other: z.number().optional().describe('Annual other spend'),
-    }).describe('Annual spending by category'),
-    pointValue: z.number().default(0.01).describe('Value per point/mile in dollars (default 0.01 = 1 cent)'),
+    cardDataJson: z.string().describe('JSON string of card data from lookupCard result'),
+    diningSpend: z.number().describe('Annual dining spend in dollars'),
+    groceriesSpend: z.number().describe('Annual groceries spend in dollars'),
+    travelSpend: z.number().describe('Annual travel spend in dollars'),
+    gasSpend: z.number().describe('Annual gas spend in dollars'),
+    otherSpend: z.number().describe('Annual other spend in dollars'),
+    pointValue: z.number().describe('Value per point in cents (e.g., 1.5 for 1.5 cents)'),
   }),
-  execute: async ({ card, spending, pointValue }) => {
+  execute: async ({ cardDataJson, diningSpend, groceriesSpend, travelSpend, gasSpend, otherSpend, pointValue }) => {
+    let card: CardData
+    try {
+      card = JSON.parse(cardDataJson)
+    } catch {
+      return { error: 'Invalid card data JSON' }
+    }
+
+    const pointValueDollars = pointValue / 100
     const breakdown: AnnualValueEstimate['breakdown'] = []
     let totalRewardsValue = 0
 
     const spendingMap: Record<string, number> = {
-      'Dining': spending.dining || 0,
-      'Groceries': spending.groceries || 0,
-      'Travel': spending.travel || 0,
-      'Gas': spending.gas || 0,
-      'Streaming': spending.streaming || 0,
-      'Other': spending.other || 0,
+      'Dining': diningSpend,
+      'Groceries': groceriesSpend,
+      'Travel': travelSpend,
+      'Gas': gasSpend,
+      'Other': otherSpend,
     }
 
     for (const [category, spend] of Object.entries(spendingMap)) {
@@ -266,7 +258,7 @@ export const calculateAnnualValueTool = tool({
         earnedValue = (spend * rateNum) / 100
       } else {
         const pointsEarned = spend * rateNum
-        earnedValue = pointsEarned * pointValue
+        earnedValue = pointsEarned * pointValueDollars
       }
 
       totalRewardsValue += earnedValue
@@ -292,14 +284,13 @@ export const calculateAnnualValueTool = tool({
 })
 
 // Tool 4: Check sign-up bonus details
-export const checkSignUpBonusTool = tool({
-  description: 'Get detailed sign-up bonus information for a card, including current offer value, spending requirement, and time limit.',
+const checkSignUpBonus = tool({
+  description: 'Get sign-up bonus information for a card including offer value, spending requirement, and time limit.',
   inputSchema: z.object({
     cardName: z.string().describe('The name of the credit card'),
     bank: z.string().describe('The bank or issuer'),
   }),
   execute: async ({ cardName, bank }) => {
-    // First try to get from cache
     const cached = await getCachedCard(cardName, bank)
     
     if (cached?.signUpBonus) {
@@ -311,7 +302,6 @@ export const checkSignUpBonusTool = tool({
       }
     }
 
-    // Scrape for bonus info
     const rawText = await scrapeCardDetails(cardName, bank)
     
     if (!rawText) {
@@ -322,7 +312,6 @@ export const checkSignUpBonusTool = tool({
       }
     }
 
-    // Parse bonus details
     const bonusMatch = rawText.match(/(?:earn|get|receive|bonus[:\s]*)\s*(\d{1,3},?\d{3})\s*(points?|miles?|dollars?|\$)/i)
     const spendMatch = rawText.match(/spend\s*\$?([\d,]+)\s*(?:in|within)?\s*(?:the\s*)?(?:first\s*)?(\d+)\s*months?/i)
     const valueMatch = rawText.match(/worth\s*(?:up\s*to\s*)?\$?([\d,]+)/i)
@@ -341,14 +330,14 @@ export const checkSignUpBonusTool = tool({
     return {
       cardName: `${bank} ${cardName}`,
       hasBonus: false,
-      message: 'No sign-up bonus currently available or could not parse details',
+      message: 'No sign-up bonus currently available',
     }
   },
 })
 
 // Tool 5: Get card fees breakdown
-export const getCardFeesTool = tool({
-  description: 'Get comprehensive fee information for a card including annual fee, foreign transaction fee, balance transfer fee, and other charges.',
+const getCardFees = tool({
+  description: 'Get fee information for a card including annual fee, foreign transaction fee, and other charges.',
   inputSchema: z.object({
     cardName: z.string().describe('The name of the credit card'),
     bank: z.string().describe('The bank or issuer'),
@@ -362,17 +351,14 @@ export const getCardFeesTool = tool({
       foreignTransactionFee: cached?.foreignTransactionFee ?? 'Unknown',
     }
 
-    // If not fully cached, scrape for more fee details
     if (!cached) {
       const rawText = await scrapeCardDetails(cardName, bank)
       
       if (rawText) {
-        // Annual fee
         const annualMatch = rawText.match(/annual\s*fee[:\s]*\$?(\d+)/i)
         if (annualMatch) fees.annualFee = parseInt(annualMatch[1], 10)
         else if (/no\s*annual\s*fee/i.test(rawText)) fees.annualFee = 0
 
-        // Foreign transaction fee
         if (/no\s*foreign\s*transaction\s*fee/i.test(rawText)) {
           fees.foreignTransactionFee = 'None'
         } else {
@@ -380,19 +366,9 @@ export const getCardFeesTool = tool({
           if (ftfMatch) fees.foreignTransactionFee = ftfMatch[1]
         }
 
-        // Balance transfer fee
         const btMatch = rawText.match(/balance\s*transfer\s*fee[:\s]*(\d+(?:\.\d+)?%)/i)
         if (btMatch) fees.balanceTransferFee = btMatch[1]
 
-        // Cash advance fee
-        const caMatch = rawText.match(/cash\s*advance\s*fee[:\s]*(\d+(?:\.\d+)?%)/i)
-        if (caMatch) fees.cashAdvanceFee = caMatch[1]
-
-        // Late payment fee
-        const lateMatch = rawText.match(/late\s*(?:payment\s*)?fee[:\s]*(?:up\s*to\s*)?\$?(\d+)/i)
-        if (lateMatch) fees.latePaymentFee = `$${lateMatch[1]}`
-
-        // APR
         const aprMatch = rawText.match(/(?:purchase\s*)?APR[:\s]*(\d+(?:\.\d+)?%?\s*[-–]\s*\d+(?:\.\d+)?%?)/i)
         if (aprMatch) fees.purchaseAPR = aprMatch[1]
       }
@@ -402,11 +378,11 @@ export const getCardFeesTool = tool({
   },
 })
 
-// Export all tools as an object
+// Export all tools
 export const agentTools = {
-  lookupCard: lookupCardTool,
-  compareRewards: compareRewardsTool,
-  calculateAnnualValue: calculateAnnualValueTool,
-  checkSignUpBonus: checkSignUpBonusTool,
-  getCardFees: getCardFeesTool,
+  lookupCard,
+  compareRewards,
+  calculateAnnualValue,
+  checkSignUpBonus,
+  getCardFees,
 }
