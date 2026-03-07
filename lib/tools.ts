@@ -1,7 +1,7 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import { getCachedCard, setCachedCard } from './cache'
-import { scrapeCardInfo, scrapeFromGoogle } from './scrape-card'
+import { scrapeCardDetails } from './scrape-card'
 import type { CardData, RewardCategory, SpendingProfile, AnnualValueEstimate } from './types'
 
 // Schema for structured card data
@@ -160,13 +160,8 @@ export const lookupCardTool = tool({
       }
     }
 
-    // Scrape fresh data
-    let rawText = await scrapeCardInfo(cardName, bank)
-    
-    // Fallback to Google if primary scrape fails
-    if (!rawText || rawText.length < 100) {
-      rawText = await scrapeFromGoogle(`${bank} ${cardName} credit card rewards annual fee`)
-    }
+    // Scrape fresh data (includes NerdWallet + Google fallback)
+    const rawText = await scrapeCardDetails(cardName, bank)
 
     if (!rawText) {
       return {
@@ -312,8 +307,8 @@ export const checkSignUpBonusTool = tool({
       }
     }
 
-    // Scrape specifically for bonus info
-    const rawText = await scrapeFromGoogle(`${bank} ${cardName} credit card sign up bonus offer ${new Date().getFullYear()}`)
+    // Scrape for bonus info
+    const rawText = await scrapeCardDetails(cardName, bank)
     
     if (!rawText) {
       return {
@@ -365,7 +360,7 @@ export const getCardFeesTool = tool({
 
     // If not fully cached, scrape for more fee details
     if (!cached) {
-      const rawText = await scrapeFromGoogle(`${bank} ${cardName} credit card fees APR`)
+      const rawText = await scrapeCardDetails(cardName, bank)
       
       if (rawText) {
         // Annual fee
