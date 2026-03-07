@@ -40,16 +40,18 @@ export default function Page() {
   }
 
   return (
-    <div className="min-h-screen bg-background relative overflow-x-hidden">
-      {/* Soft gradient background blobs */}
+    <>
+      {/* Soft gradient background blobs - outside main container */}
       <div
-        className="pointer-events-none fixed inset-0 -z-10"
+        className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
         aria-hidden="true"
       >
         <div className="absolute -top-40 -left-40 h-[600px] w-[600px] rounded-full bg-primary/20 blur-3xl" />
         <div className="absolute -bottom-40 -right-40 h-[600px] w-[600px] rounded-full bg-secondary/20 blur-3xl" />
         <div className="absolute top-1/3 left-1/2 h-[400px] w-[400px] -translate-x-1/2 rounded-full bg-accent/10 blur-3xl" />
       </div>
+
+      <div className="min-h-screen bg-background relative">
 
       {/* Navigation */}
       <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-md">
@@ -269,7 +271,8 @@ export default function Page() {
           </span>
         </div>
       </footer>
-    </div>
+      </div>
+    </>
   )
 }
 
