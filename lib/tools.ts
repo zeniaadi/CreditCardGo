@@ -1,6 +1,6 @@
 /**
- * CreditCardGo Agent Tools (AI SDK 6)
- * Simplified schemas for OpenAI compatibility
+ * CreditCardGo Agent Tools - AI SDK 6
+ * Tools use inputSchema with simple Zod types for OpenAI strict mode
  */
 import { tool } from 'ai'
 import { z } from 'zod'
